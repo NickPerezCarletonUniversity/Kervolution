@@ -42,4 +42,4 @@ To test the non-linearity impact on the performance, the activations are removed
 <br />
 
 ### Licence
-MIT
+MIT - original code can be found at https://github.com/amalF/Kervolution, who also uses the same license
