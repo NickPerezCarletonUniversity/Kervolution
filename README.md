@@ -10,7 +10,7 @@ Using kernels as a source of non-linearity is more effective than using activati
 
 ### Implementation
 
-This code was tested using *TF2.0* and *python 3.6*.
+This code was tested using *TF2.3.1* and *python 3.8.5*.
 
 ```python
 pip install -r requirements.txt

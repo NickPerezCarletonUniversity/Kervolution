@@ -143,7 +143,7 @@ class KernelConv2D(tf.keras.layers.Conv2D):
 
 def get_kernel(kernel_name, **kwargs):
     if kernel_name == 'polynomial':
-        return PolynomialKernel(cp=kwargs['cp'], dp=kwargs['dp'])
+        return PolynomialKernel(cp=kwargs['cp'], dp=kwargs['dp'], trainable=kwargs['trainable'])
     elif kernel_name == 'gaussian':
         return GaussianKernel(gamma=kwargs['gamma'])
     elif kernel_name == 'sigmoid':

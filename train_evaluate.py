@@ -9,15 +9,17 @@ import datasets
 from models import models_factory
 from layers import *
 import click
+from datetime import datetime
 
 #args
 @click.command()
 ##Data args
-@click.option("-d","--datasetname", default="mnist", type=click.Choice(['cifar10','mnist']))
+@click.option("-d","--datasetname", default="mnist", type=click.Choice(['cifar10','mnist', 'fashion_mnist']))
 @click.option("--n_classes", default=10)
 ##Training args
 @click.option('--model_name', default='lenetKNN')
 @click.option('--kernel', default='polynomial')
+@click.option('--trainable_kernel', default='false')
 @click.option('--pooling_method', default='max') 
 @click.option('--cp', default=1.0)
 @click.option('--dp', default=3.0)
@@ -31,7 +33,7 @@ import click
 @click.option("-o","--base_log_dir", default="logs")
 
 def main(datasetname,n_classes,batch_size,
-         model_name, kernel, cp, dp, gamma,pooling_method,
+         model_name, kernel, trainable_kernel, cp, dp, gamma,pooling_method,
          epochs,lr,keep_prob,weight_decay,
          base_log_dir):
 
@@ -40,13 +42,18 @@ def main(datasetname,n_classes,batch_size,
     log_dir = os.path.join(os.path.expanduser(base_log_dir),
                            "{}".format(datasetname))
     os.makedirs(log_dir, exist_ok=True)
+    
+    print('Using the ' + datasetname + ' dataset.')
 
     # dataset
     train_dataset, train_samples = datasets.get_dataset(datasetname, batch_size)
     test_dataset, _ = datasets.get_dataset(datasetname, batch_size, subset="test", shuffle=False)
 
+    if trainable_kernel.lower()=='true':
+        print('Using a trainable kernel.')
+        
     #Network
-    kernel_fn = get_kernel(kernel, cp=cp, dp=dp, gamma=gamma)
+    kernel_fn = get_kernel(kernel, cp=cp, dp=dp, gamma=gamma, trainable=trainable_kernel.lower()=='true')
 
     model = models_factory.get_model(model_name,
                       num_classes=n_classes,
@@ -56,7 +63,7 @@ def main(datasetname,n_classes,batch_size,
 
     #Train optimizer, loss
     nrof_steps_per_epoch = (train_samples//batch_size)
-    boundries = [nrof_steps_per_epoch*75, nrof_steps_per_epoch*125]
+    boundries = [nrof_steps_per_epoch*10, nrof_steps_per_epoch*15]
     values = [lr, lr*0.1, lr*0.01]
     lr_schedule = tf.keras.optimizers.schedules.PiecewiseConstantDecay(\
                     boundries,
@@ -90,12 +97,27 @@ def main(datasetname,n_classes,batch_size,
     test_summary_writer = tf.summary.create_file_writer(os.path.join(log_dir,
                                                                      'summaries',
                                                                      'test'))
-
+    
+    #https://www.programiz.com/python-programming/datetime/current-datetime
+    # datetime object containing current date and time
+    now = datetime.now()
+    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+    
+    trainable_str = ""
+    if trainable_kernel:
+        trainable_str = "_trainable"
+                                                                     
+    granular_test_summary_writer = tf.summary.create_file_writer(os.path.join(log_dir,
+                                                                     'summaries',
+                                                                      dt_string,
+                                                                      kernel + trainable_str,
+                                                                     'granular_test'))
 
     ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=optimizer, net=model)
     ckpt_path = os.path.join(log_dir, 'checkpoints')
     manager = tf.train.CheckpointManager(ckpt,ckpt_path, max_to_keep=3)
-    ckpt.restore(manager.latest_checkpoint)
+    #don't restore for now...
+    #ckpt.restore(manager.latest_checkpoint)
     if manager.latest_checkpoint:
         print("Restored from {}".format(manager.latest_checkpoint))
     else:
@@ -108,6 +130,10 @@ def main(datasetname,n_classes,batch_size,
 
             # update epoch counter
         ep_cnt.assign_add(1)
+        
+        #with granular_test_summary_writer.as_default():
+        #    tf.summary.scalar("accuracy", 0, step=0)
+        
         with train_summary_writer.as_default():
             # train for an epoch
             for step, (x,y) in enumerate(train_dataset):
@@ -123,13 +149,27 @@ def main(datasetname,n_classes,batch_size,
                     save_path = manager.save()
                     print("Saved checkpoint for step {}: {}".format(int(ckpt.step),
                                                                     save_path))
-                # Log every 200 batch
-                if step % 200 == 0:
+                # Log every 100 batch
+                if (step + 1) % 100 == 0:
                     train_acc = train_acc_metric.result() 
                     print("Training loss {:1.2f}, accuracu {} at step {}".format(\
                             loss.numpy(),
                             float(train_acc),
-                            step))
+                            step + 1))
+                    
+                    
+                    with granular_test_summary_writer.as_default():
+                        for x_batch, y_batch in test_dataset:
+                            if len(x_batch.shape)==3:
+                                x_batch = tf.expand_dims(x_batch, 3)
+                            test_logits = model(x_batch, training=False)
+                            # Update test metrics
+                            test_acc_metric(y_batch, test_logits)
+
+                        test_acc = test_acc_metric.result()
+                        tf.summary.scalar("accuracy", test_acc, step=(step + 1) + ep * nrof_steps_per_epoch)
+                        test_acc_metric.reset_states()
+                        print('[Step {}] Test acc: {}'.format(step + 1, float(test_acc)))
 
 
             # Display metrics at the end of each epoch.
