@@ -30,16 +30,19 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
          log_dir):
     
     print('Using the ' + datasetname + ' dataset.')
+    
+    if trainable_kernel.lower()=='true':
+        print('Using a trainable kernel.')
+        trainable_kernel = True
+    else:
+        trainable_kernel = False
 
     # dataset
     train_dataset, train_samples = datasets.get_dataset(datasetname, batch_size)
     test_dataset, _ = datasets.get_dataset(datasetname, batch_size, subset="test", shuffle=False)
-
-    if trainable_kernel.lower()=='true':
-        print('Using a trainable kernel.')
         
     #Network
-    kernel_fn = get_kernel(kernel, cp=cp, dp=dp, gamma=gamma, trainable=trainable_kernel.lower()=='true')
+    kernel_fn = get_kernel(kernel, cp=cp, dp=dp, gamma=gamma, trainable=trainable_kernel)
 
     model = models_factory.get_model(model_name,
                       num_classes=n_classes,
@@ -87,9 +90,9 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
     granular_test_summary_writer = tf.summary.create_file_writer(os.path.join(log_dir,
                                                                  'summaries',
                                                                  'test',
-                                                                  dt_string,
                                                                   kernel + trainable_str,
-                                                                 'granular_test'))                                               
+                                                                  dt_string,
+                                                                 'granular_test'))                                             
 
     best_test_accuracy = 0
     best_test_accuracy_to_return = 0
@@ -184,26 +187,46 @@ def main(datasetname,n_classes,batch_size,
     trainable_str = get_trainable_str(trainable_kernel)
 
     if lr_search.lower()=='true':
-        lr_search_test_summary_writer = tf.summary.create_file_writer(os.path.join(log_dir,
-                                                                 'summaries',
-                                                                 'learning_rate_searches',
-                                                                  get_time_str(),
-                                                                  kernel + trainable_str,
-                                                                 'granular_test'))
+        accuracies = []
+        learning_rates = []
+        lr_search_log_path = os.path.join(log_dir,'summaries','learning_rate_searches',
+                                          kernel + trainable_str,get_time_str())
+        lr_search_test_summary_writer = tf.summary.create_file_writer(os.path.join(lr_search_log_path,
+                                                                                   'granular_test'))
         current_lr = 0.1
-        epochs = 1
+        epochs = 3
         current_lr_step = 0
         while current_lr >= 0.001:
-            print("current_lr: " + str(current_lr))
+            print("current learning rate: " + str(current_lr))
             best_accuracy = train_and_evaluate(datasetname,n_classes,batch_size,
                                                model_name, kernel, trainable_kernel, cp, dp, gamma,pooling_method,
                                                epochs,current_lr,keep_prob,weight_decay,
                                                log_dir)
-            print("best_accuracy: " + str(best_accuracy))
+            print("best validation accuracy: " + str(best_accuracy) + " with a learning rate of: " + str(current_lr))
+            print('made it here!1')
             with lr_search_test_summary_writer.as_default():
                 tf.summary.scalar("accuracy", best_accuracy, step=current_lr_step)
+            print('made it here!2')
+            accuracies.append(best_accuracy)
+            print('made it here!3')
+            learning_rates.append(current_lr)
+            print('made it here!4')
+            
             current_lr = current_lr / 2
+            print('made it here!5')
             current_lr_step = current_lr_step + 1
+            print('made it here!6')
+            
+        accuracies = np.array(accuracies)
+        print('made it here!7')
+        np.save(os.path.join(lr_search_log_path,'numpy_accuracies'),accuracies)
+        print('made it here!8')
+        learning_rates = np.array(learning_rates)
+        print('made it here!9')
+        np.save(os.path.join(lr_search_log_path,'numpy_learning_rates'),learning_rates)
+        print('made it here!10')
+        
+         
     else:
         train_and_evaluate(datasetname,n_classes,batch_size,
                            model_name, kernel, trainable_kernel, cp, dp, gamma,pooling_method,
