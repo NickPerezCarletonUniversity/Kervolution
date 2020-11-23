@@ -2,6 +2,7 @@ import numpy as np
 import os
 import multiprocessing
 import tensorflow as tf
+from sklearn.model_selection import StratifiedKFold
 
 class DataSet(object):
     """
@@ -111,8 +112,26 @@ class Cifar10DataSet(DataSet):
         label = tf.cast(label, tf.int64)
 
         return image, label
-
-
+    
+def generate_split(X_train, X_validate, y_train, y_validate, k_folds, fold, subset):
+    images = np.concatenate([X_train, X_validate], axis=0)
+    labels = np.concatenate([y_train, y_validate])
+    skfolds = StratifiedKFold(n_splits=k_folds, random_state=1, shuffle=True)
+    counter = 0
+    for train_indices, validate_indices in skfolds.split(images, labels):
+        if subset == "train":
+            (train_images, train_labels) = (images[train_indices], labels[train_indices])
+        else:
+            (train_images, train_labels) = (images[validate_indices], labels[validate_indices])
+        if counter == fold:
+            print("train_indices: ")
+            print(train_indices)
+            print("validate_indices: ")
+            print(validate_indices)
+            break
+        counter = counter + 1
+    return (train_images, train_labels)
+    
 class MnistDataSet(DataSet):
     def __init__(self,
                 image_dims = (28,28,1),
@@ -120,16 +139,39 @@ class MnistDataSet(DataSet):
                 use_distortion=True,
                 shuffle=False,
                 repeat=1,
-                nThreads=None):
-        #Load Data
-        train_data, test_data = tf.keras.datasets.mnist.load_data()
+                nThreads=None,
+                k_folds=0,
+                fold=0,
+                fashion=False):
+        raw_data = 0
+        if fashion:
+            raw_data = tf.keras.datasets.fashion_mnist.load_data()
+        else:
+            raw_data = tf.keras.datasets.mnist.load_data()
+        
+        (train_images, train_labels), (test_images, test_labels) = raw_data
+        
         self.subset = subset
         if self.subset == "train":
-            data = train_data
-            self.num_samples = len(train_data[0])
+            if k_folds > 1:
+                (train_images, train_labels) = generate_split(train_images, test_images, train_labels, 
+                                                              test_labels, k_folds, fold, subset)
+
+            data = (train_images, train_labels)
+            self.num_samples = train_images.shape[0]
         else:
-            data = test_data
-            self.num_samples = len(test_data[0])
+            if k_folds > 1:
+                (test_images, test_labels) = generate_split(train_images, test_images, train_labels, 
+                                                              test_labels, k_folds, fold, subset)
+            data = (test_images, test_labels)
+            self.num_samples = test_images.shape[0]
+          
+        
+        test_images, test_labels = data
+        
+        print(self.subset + ":")
+        print("test_images.shape: " + str(test_images.shape))
+        print("test_images.shape: " + str(test_labels.shape))
 
         super(MnistDataSet, self).__init__(data,
                                            image_dims,
@@ -144,54 +186,27 @@ class MnistDataSet(DataSet):
         image = tf.cast(image, tf.float32)/255.0
         label = tf.cast(label, tf.int64)
         return image, label
-    
-class FashionMnistDataSet(DataSet):
-    def __init__(self,
-                image_dims = (28,28,1),
-                subset='train',
-                use_distortion=True,
-                shuffle=False,
-                repeat=1,
-                nThreads=None):
-        #Load Data
-        train_data, test_data = tf.keras.datasets.fashion_mnist.load_data()
-        self.subset = subset
-        if self.subset == "train":
-            data = train_data
-            self.num_samples = len(train_data[0])
-        else:
-            data = test_data
-            self.num_samples = len(test_data[0])
 
-        super(FashionMnistDataSet, self).__init__(data,
-                                           image_dims,
-                                           use_distortion,
-                                           shuffle,
-                                           repeat,
-                                           nThreads)
-    def _map_fn(self, image, label):
-        return self.preprocess(image, label)
-
-    def preprocess(self, image, label):
-        image = tf.cast(image, tf.float32)/255.0
-        label = tf.cast(label, tf.int64)
-        return image, label
-
-def get_dataset(datasetname, batch_size, subset="train", shuffle=True, repeat=1, use_distortion=False):
+def get_dataset(datasetname, batch_size, subset="train", shuffle=True, repeat=1, use_distortion=False, k_folds=0, fold=0):
     if datasetname=='mnist':
         mnistdataset = MnistDataSet(subset= subset,
                                             shuffle=shuffle,
                                             repeat=repeat,
-                                            use_distortion=use_distortion)
+                                            use_distortion=use_distortion,
+                                            k_folds=k_folds,
+                                            fold=fold,)
         dataset = mnistdataset.make_batch(batch_size)
         nrof_samples = mnistdataset.num_samples
         return dataset, nrof_samples
     
     if datasetname=='fashion_mnist':
-        fashionmnistdataset = FashionMnistDataSet(subset=subset,
+        fashionmnistdataset = MnistDataSet(subset=subset,
                                             shuffle=shuffle,
                                             repeat=repeat,
-                                            use_distortion=use_distortion)
+                                            use_distortion=use_distortion,
+                                            k_folds=k_folds,
+                                            fold=fold,
+                                            fashion=True)
         dataset = fashionmnistdataset.make_batch(batch_size)
         nrof_samples = fashionmnistdataset.num_samples
         return dataset, nrof_samples

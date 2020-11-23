@@ -27,7 +27,7 @@ def get_trainable_str(trainable_kernel):
 def train_and_evaluate(datasetname,n_classes,batch_size,
          model_name, kernel, trainable_kernel, cp, dp, gamma,pooling_method,
          epochs,lr,keep_prob,weight_decay,
-         log_dir):
+         log_dir, num_folds, fold):
     
     print('Using the ' + datasetname + ' dataset.')
     
@@ -38,8 +38,8 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
         trainable_kernel = False
 
     # dataset
-    train_dataset, train_samples = datasets.get_dataset(datasetname, batch_size)
-    test_dataset, _ = datasets.get_dataset(datasetname, batch_size, subset="test", shuffle=False)
+    train_dataset, train_samples = datasets.get_dataset(datasetname, batch_size, k_folds=num_folds, fold=fold)
+    validate_dataset, _ = datasets.get_dataset(datasetname, batch_size, subset="validate", shuffle=False, k_folds=num_folds, fold=fold)
         
     #Network
     kernel_fn = get_kernel(kernel, cp=cp, dp=dp, gamma=gamma, trainable=trainable_kernel)
@@ -62,7 +62,7 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
 
     #metrics
     train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
-    test_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
+    validate_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
 
     #Train step
     @tf.function
@@ -86,16 +86,17 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
     #Summary writers
     train_summary_writer = tf.summary.create_file_writer(os.path.join(log_dir,
                                                                       'summaries',
-                                                                      'train'))
-    granular_test_summary_writer = tf.summary.create_file_writer(os.path.join(log_dir,
-                                                                 'summaries',
-                                                                 'test',
-                                                                  kernel + trainable_str,
-                                                                  dt_string,
-                                                                 'granular_test'))                                             
-
-    best_test_accuracy = 0
-    best_test_accuracy_to_return = 0
+                                                                      'train',
+                                                                      kernel + trainable_str,
+                                                                      dt_string))
+    validate_summary_writer = tf.summary.create_file_writer(os.path.join(log_dir,
+                                                                         'summaries',
+                                                                         'validate',
+                                                                         kernel + trainable_str,
+                                                                         dt_string))                                            
+    
+    best_validate_accuracy = 0
+    best_train_accuracy = 0
     
     for ep in tqdm.trange(epochs, desc='Epoch Loop'):
         if ep < ep_cnt:
@@ -104,51 +105,50 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
             # update epoch counter
         ep_cnt.assign_add(1)
         
-        with train_summary_writer.as_default():
-            # train for an epoch
-            for step, (x,y) in enumerate(train_dataset):
-                if len(x.shape)==3:
-                    x = tf.expand_dims(x,3)
-                tf.summary.image("input_image", x, step=optimizer.iterations)
-                loss, logits = train_step(x,y)
-                train_acc_metric(y, logits)
-                tf.summary.scalar("loss", loss, step=optimizer.iterations)
-                
-                # Log every 100 batch
-                if (step + 1) % 100 == 0:
-                    train_acc = train_acc_metric.result() 
-                    print("Training loss {:1.2f}, accuracu {} at step {}".format(\
-                            loss.numpy(),
-                            float(train_acc),
-                            step + 1))
-                    
-                    
-                    with granular_test_summary_writer.as_default():
-                        for x_batch, y_batch in test_dataset:
-                            if len(x_batch.shape)==3:
-                                x_batch = tf.expand_dims(x_batch, 3)
-                            test_logits = model(x_batch, training=False)
-                            # Update test metrics
-                            test_acc_metric(y_batch, test_logits)
+        # train for an epoch
+        for step, (x,y) in enumerate(train_dataset):
+            if len(x.shape)==3:
+                x = tf.expand_dims(x,3)
+            loss, logits = train_step(x,y)
 
-                        test_acc = test_acc_metric.result()
-                        tf.summary.scalar("accuracy", test_acc, step=(step + 1) + ep * nrof_steps_per_epoch)
-                        test_acc_metric.reset_states()
-                        print('[Step {}] Test acc: {}'.format(step + 1, float(test_acc)))
-                        if best_test_accuracy <= float(test_acc):
-                            best_test_accuracy = float(test_acc)
-                            best_test_accuracy_to_return = test_acc
-                        print("best test accuracy so far: " + str(best_test_accuracy))
+            # Log every 100 batch
+            if (step + 1) % 100 == 0:
+                train_acc = 0
+                validate_acc = 0
+                with train_summary_writer.as_default():
+                    for x_batch, y_batch in train_dataset:
+                        if len(x_batch.shape)==3:
+                            x_batch = tf.expand_dims(x_batch, 3)
+                        train_logits = model(x_batch, training=False)
+                        # Update train metrics
+                        train_acc_metric(y_batch, train_logits)
+                    train_acc = train_acc_metric.result()
+                    train_acc_metric.reset_states()
+                    tf.summary.scalar("accuracy", train_acc, step=(step + 1) + ep * nrof_steps_per_epoch)
 
 
-            # Display metrics at the end of each epoch.
-            train_acc = train_acc_metric.result()
-            tf.summary.scalar("accuracy", train_acc, step=ep)
-            print('Training acc over epoch: %s' % (float(train_acc),))
-            # Reset training metrics at the end of each epoch
-            train_acc_metric.reset_states()
+                with validate_summary_writer.as_default():
+                    for x_batch, y_batch in validate_dataset:
+                        if len(x_batch.shape)==3:
+                            x_batch = tf.expand_dims(x_batch, 3)
+                        validate_logits = model(x_batch, training=False)
+                        # Update validate metrics
+                        validate_acc_metric(y_batch, validate_logits)
+
+                    validate_acc = validate_acc_metric.result()
+                    validate_acc_metric.reset_states()
+                    tf.summary.scalar("accuracy", validate_acc, step=(step + 1) + ep * nrof_steps_per_epoch)
+
+                print('[Step {}] train acc: {}'.format(step + 1, float(train_acc)))
+                print('[Step {}] validate acc: {}'.format(step + 1, float(validate_acc)))
+
+                if best_train_accuracy <= float(train_acc):
+                    print("got a better train accuracy, updating validate accuracy")
+                    best_validate_accuracy = float(validate_acc)
+                    best_train_accuracy = float(train_acc)
+                print("best validate accuracy so far: " + str(best_validate_accuracy))
             
-    return best_test_accuracy
+    return best_validate_accuracy
 
 #args
 @click.command()
@@ -187,51 +187,43 @@ def main(datasetname,n_classes,batch_size,
     trainable_str = get_trainable_str(trainable_kernel)
 
     if lr_search.lower()=='true':
-        accuracies = []
-        learning_rates = []
+        accuracies = [[],[],[],[],[]]
+        learning_rates = [[],[],[],[],[]]
         lr_search_log_path = os.path.join(log_dir,'summaries','learning_rate_searches',
                                           kernel + trainable_str,get_time_str())
-        lr_search_test_summary_writer = tf.summary.create_file_writer(os.path.join(lr_search_log_path,
-                                                                                   'granular_test'))
+        lr_search_validate_summary_writer = tf.summary.create_file_writer(os.path.join(lr_search_log_path))
         current_lr = 0.1
-        epochs = 3
+
         current_lr_step = 0
-        while current_lr >= 0.001:
-            print("current learning rate: " + str(current_lr))
-            best_accuracy = train_and_evaluate(datasetname,n_classes,batch_size,
-                                               model_name, kernel, trainable_kernel, cp, dp, gamma,pooling_method,
-                                               epochs,current_lr,keep_prob,weight_decay,
-                                               log_dir)
-            print("best validation accuracy: " + str(best_accuracy) + " with a learning rate of: " + str(current_lr))
-            print('made it here!1')
-            with lr_search_test_summary_writer.as_default():
-                tf.summary.scalar("accuracy", best_accuracy, step=current_lr_step)
-            print('made it here!2')
-            accuracies.append(best_accuracy)
-            print('made it here!3')
-            learning_rates.append(current_lr)
-            print('made it here!4')
+        num_folds = 5
+        while current_lr >= 0.00001:
+            for fold in range(num_folds):
+                print("current learning rate: " + str(current_lr))
+                print("current fold: " + str(fold))
+                best_accuracy = train_and_evaluate(datasetname,n_classes,batch_size,
+                                                   model_name, kernel, trainable_kernel, cp, dp, gamma,pooling_method,
+                                                   epochs,current_lr,keep_prob,weight_decay,
+                                                   log_dir, num_folds, fold)
+                print("best validation accuracy: " + str(best_accuracy) + " with a learning rate of: " + str(current_lr))
+                with lr_search_validate_summary_writer.as_default():
+                    tf.summary.scalar("accuracy", best_accuracy, step=current_lr_step)
+                accuracies[fold].append(best_accuracy)
+                learning_rates[fold].append(current_lr)
             
             current_lr = current_lr / 2
-            print('made it here!5')
             current_lr_step = current_lr_step + 1
-            print('made it here!6')
             
         accuracies = np.array(accuracies)
-        print('made it here!7')
         np.save(os.path.join(lr_search_log_path,'numpy_accuracies'),accuracies)
-        print('made it here!8')
         learning_rates = np.array(learning_rates)
-        print('made it here!9')
         np.save(os.path.join(lr_search_log_path,'numpy_learning_rates'),learning_rates)
-        print('made it here!10')
         
          
     else:
         train_and_evaluate(datasetname,n_classes,batch_size,
                            model_name, kernel, trainable_kernel, cp, dp, gamma,pooling_method,
                            epochs,lr,keep_prob,weight_decay,
-                           log_dir)
+                           log_dir, 7, 0)
 
 
 if __name__=="__main__":
