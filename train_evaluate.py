@@ -19,7 +19,7 @@ def get_time_str():
 
 def get_trainable_str(trainable_kernel):
     trainable_str = ""
-    if trainable_kernel:
+    if trainable_kernel.lower()=="true":
         trainable_str = "_trainable"  
         
     return trainable_str
@@ -30,6 +30,8 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
          log_dir, num_folds, fold):
     
     print('Using the ' + datasetname + ' dataset.')
+    
+    trainable_str = get_trainable_str(trainable_kernel)
     
     if trainable_kernel.lower()=='true':
         print('Using a trainable kernel.')
@@ -80,8 +82,6 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
     ep_cnt = tf.Variable(initial_value=0, trainable=False, dtype=tf.int64)
     
     dt_string = get_time_str()
-    
-    trainable_str = get_trainable_str(trainable_kernel)
 
     #Summary writers
     train_summary_writer = tf.summary.create_file_writer(os.path.join(log_dir,
@@ -192,11 +192,11 @@ def main(datasetname,n_classes,batch_size,
         lr_search_log_path = os.path.join(log_dir,'summaries','learning_rate_searches',
                                           kernel + trainable_str,get_time_str())
         lr_search_validate_summary_writer = tf.summary.create_file_writer(os.path.join(lr_search_log_path))
-        current_lr = 0.1
+        current_lr = 0.2
 
         current_lr_step = 0
         num_folds = 5
-        while current_lr >= 0.00001:
+        while current_lr >= 0.00002:
             for fold in range(num_folds):
                 print("current learning rate: " + str(current_lr))
                 print("current fold: " + str(fold))
