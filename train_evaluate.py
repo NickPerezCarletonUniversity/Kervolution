@@ -10,6 +10,7 @@ from models import models_factory
 from layers import *
 import click
 from datetime import datetime
+from time import process_time 
 
 def get_time_str():
     #https://www.programiz.com/python-programming/datetime/current-datetime
@@ -24,10 +25,16 @@ def get_trainable_str(trainable_kernel):
         
     return trainable_str
 
+def delete_file_if_exists(file):
+    if os.path.exists(file):
+        os.remove(file)
+    else:
+        print("The file does not exist: " + file)
+
 def train_and_evaluate(datasetname,n_classes,batch_size,
          model_name, kernel, trainable_kernel, cp, dp, gamma,pooling_method,
          epochs,lr,keep_prob,weight_decay,
-         log_dir, num_folds, fold):
+         log_dir, num_folds, fold, target_accuracies=[0.98]):
     
     print('Using the ' + datasetname + ' dataset.')
     
@@ -97,6 +104,8 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
     
     best_validate_accuracy = 0
     best_train_accuracy = 0
+    converge_times = np.zeros(len(target_accuracies))
+    total_time_training = 0
     
     for ep in tqdm.trange(epochs, desc='Epoch Loop'):
         if ep < ep_cnt:
@@ -109,7 +118,10 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
         for step, (x,y) in enumerate(train_dataset):
             if len(x.shape)==3:
                 x = tf.expand_dims(x,3)
-            loss, logits = train_step(x,y)
+            time_start = process_time()  
+            loss, logits = train_step(x,y)#train step
+            time_stop = process_time()
+            total_time_training = total_time_training + (time_stop - time_start)
 
             # Log every 100 batch
             if (step + 1) % 100 == 0:
@@ -147,8 +159,14 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
                     best_validate_accuracy = float(validate_acc)
                     best_train_accuracy = float(train_acc)
                 print("best validate accuracy so far: " + str(best_validate_accuracy))
+                
+                for i in range(len(target_accuracies)):
+                    if target_accuracies[i] <= best_validate_accuracy and converge_times[i] == 0:
+                        converge_times[i] = total_time_training
+                        print("new converge time of: " + str(converge_times[i]))
+                        print("for convergance of: " + str(target_accuracies[i]))
             
-    return best_validate_accuracy
+    return best_validate_accuracy, converge_times
 
 #args
 @click.command()
@@ -196,27 +214,41 @@ def main(datasetname,n_classes,batch_size,
 
         current_lr_step = 0
         num_folds = 5
-        while current_lr >= 0.00002:
+        target_accuracies=[0.97,0.98,0.99]
+        recorded_converge_times=[[[],[],[],[],[]],[[],[],[],[],[]],[[],[],[],[],[]]]
+        while current_lr >= 0.0002:
             for fold in range(num_folds):
                 print("current learning rate: " + str(current_lr))
                 print("current fold: " + str(fold))
-                best_accuracy = train_and_evaluate(datasetname,n_classes,batch_size,
+                best_accuracy, converge_times = train_and_evaluate(datasetname,n_classes,batch_size,
                                                    model_name, kernel, trainable_kernel, cp, dp, gamma,pooling_method,
                                                    epochs,current_lr,keep_prob,weight_decay,
-                                                   log_dir, num_folds, fold)
+                                                   log_dir, num_folds, fold, target_accuracies)
                 print("best validation accuracy: " + str(best_accuracy) + " with a learning rate of: " + str(current_lr))
                 with lr_search_validate_summary_writer.as_default():
                     tf.summary.scalar("accuracy", best_accuracy, step=current_lr_step)
                 accuracies[fold].append(best_accuracy)
                 learning_rates[fold].append(current_lr)
+                for i in range(len(target_accuracies)):
+                    recorded_converge_times[i][fold].append(converge_times[i])
+                
             
             current_lr = current_lr / 2
             current_lr_step = current_lr_step + 1
             
-        accuracies = np.array(accuracies)
-        np.save(os.path.join(lr_search_log_path,'numpy_accuracies'),accuracies)
-        learning_rates = np.array(learning_rates)
-        np.save(os.path.join(lr_search_log_path,'numpy_learning_rates'),learning_rates)
+            lr_folder = "lr_" + str(current_lr_step)
+            if not os.path.exists(os.path.join(lr_search_log_path,lr_folder)):
+                os.makedirs(os.path.join(lr_search_log_path,lr_folder))
+            np_accuracies = np.array(accuracies)
+            np.save(os.path.join(lr_search_log_path,lr_folder,'numpy_accuracies'),np_accuracies)
+            np_learning_rates = np.array(learning_rates)
+            np.save(os.path.join(lr_search_log_path,lr_folder,'numpy_learning_rates'),np_learning_rates)
+
+            for i in range(len(target_accuracies)):
+                recorded_converge_time = np.array(recorded_converge_times[i])
+                np.save(os.path.join(lr_search_log_path,lr_folder,
+                                     'numpy_target_convergence_'+str(target_accuracies[i]*100)),
+                        recorded_converge_time)
         
          
     else:
