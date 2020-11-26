@@ -215,7 +215,9 @@ def main(datasetname,n_classes,batch_size,
         current_lr_step = 0
         num_folds = 5
         target_accuracies=[0.97,0.98,0.99]
-        recorded_converge_times=[[[],[],[],[],[]],[[],[],[],[],[]],[[],[],[],[],[]]]
+        recorded_converge_times=[]
+        for i in range(len(target_accuracies)):
+            recorded_converge_times.append([[],[],[],[],[]])
         while current_lr >= 0.0002:
             for fold in range(num_folds):
                 print("current learning rate: " + str(current_lr))
@@ -247,7 +249,7 @@ def main(datasetname,n_classes,batch_size,
             for i in range(len(target_accuracies)):
                 recorded_converge_time = np.array(recorded_converge_times[i])
                 np.save(os.path.join(lr_search_log_path,lr_folder,
-                                     'numpy_target_convergence_'+str(target_accuracies[i]*100)),
+                                     'numpy_target_convergence_'+str(int(target_accuracies[i]*100))),
                         recorded_converge_time)
         
          
