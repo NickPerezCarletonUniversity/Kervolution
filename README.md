@@ -1,12 +1,12 @@
 # Kervolutional Neural Networks
-A Tensorflow implementation of the [Kervolutional Neural Networks (KNN)](https://arxiv.org/pdf/1904.03955.pdf).
+A Tensorflow implementation of the [Kervolutional Neural Networks (KNN)](https://arxiv.org/pdf/1904.03955.pdf) paper.
 
 ### Introduction
 
-The paper introduces an alternative operator to the usual convolution operator in CNNs, called *kernel convolution*.
-The key idea is to use non-linear kernels to extract more complexe features without adding any additional parameters.
+The KNN paper introduces an alternative operator to the usual convolution operator in CNNs, called *kernel convolution*.
+The key idea is to use non-linear kernels to extract more complexe features without adding any additional parameters. According to the authoers, using kernels as a source of non-linearity is supposedly more effective than using activation functions and max pooling operations.
 
-Using kernels as a source of non-linearity is more effective than using activation functions and max pooling operations (see figure below).
+The purpose of this repository is to further test the KNN paper's claims and also further analyze why KNNs may or may not be better than CNNs and under which circumstances.
 
 ### Implementation
 
