@@ -51,7 +51,7 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
     validate_dataset, _ = datasets.get_dataset(datasetname, batch_size, subset="validate", shuffle=False, k_folds=num_folds, fold=fold)
         
     #Network
-    kernel_fn = get_kernel(kernel, cp=cp, dp=dp, gamma=gamma, trainable=trainable_kernel)
+    kernel_fn = get_kernel(kernel, cp=cp, dp=dp, gamma=gamma, trainable=trainable_kernel, lambda_param=0.1)
 
     model = models_factory.get_model(model_name,
                       num_classes=n_classes,

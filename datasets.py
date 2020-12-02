@@ -124,10 +124,6 @@ def generate_split(X_train, X_validate, y_train, y_validate, k_folds, fold, subs
         else:
             (train_images, train_labels) = (images[validate_indices], labels[validate_indices])
         if counter == fold:
-            print("train_indices: ")
-            print(train_indices)
-            print("validate_indices: ")
-            print(validate_indices)
             break
         counter = counter + 1
     return (train_images, train_labels)
@@ -165,13 +161,6 @@ class MnistDataSet(DataSet):
                                                               test_labels, k_folds, fold, subset)
             data = (test_images, test_labels)
             self.num_samples = test_images.shape[0]
-          
-        
-        test_images, test_labels = data
-        
-        print(self.subset + ":")
-        print("test_images.shape: " + str(test_images.shape))
-        print("test_images.shape: " + str(test_labels.shape))
 
         super(MnistDataSet, self).__init__(data,
                                            image_dims,

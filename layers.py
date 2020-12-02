@@ -40,6 +40,59 @@ class LPNormKernel(tf.keras.layers.Layer):
         if b is not None:
             return out + b
         return out
+    
+class MixtureOfRBFandPolynomial(tf.keras.layers.Layer):
+    def __init__(self,cp=1.0, dp=3.0, gamma=1.0, trainable=False, lambda_param=0.1):
+
+        super(MixtureOfRBFandPolynomial, self).__init__(name="mixtureOfRBFandPolynomialConv2D")
+        self.dp = dp
+        self.cp = cp
+        self.trainable = trainable
+        self.linear = LinearKernel()
+        self.diff = DifferenceLayer()
+        self.initial_gamma = gamma
+        self.lambda_param = lambda_param
+        
+    def build(self, input_shape):
+        if self.trainable:
+            self.cp = self.add_weight(\
+                name='cp',
+                shape=(),
+                initializer=tf.keras.initializers.Constant(0.3),
+                trainable=True,
+                constraint=tf.keras.constraints.non_neg())
+            self.lambda_param = self.add_weight(\
+                name='lambda_param',
+                shape=(),
+                initializer=tf.keras.initializers.Constant(0.5),
+                trainable=True)
+                #constraint=tf.keras.constraints.MinMaxNorm(min_value=0.0, max_value=1.0, rate=1.0))
+            self.gamma = self.initial_gamma
+        else:
+            self.gamma = self.initial_gamma
+
+        super(MixtureOfRBFandPolynomial, self).build(input_shape)
+        
+    def call(self, inputs):
+        x, w, b = inputs
+        
+        conv = self.linear((x,w,None))
+        s = conv + self.cp
+        poly_out =  s**self.dp
+        
+        diff = self.diff((x,w))
+        diff_norm = tf.reduce_sum(diff**2,axis=2)
+        rbf_out = tf.exp(-self.gamma*diff_norm)
+        rbf_out = tf.reshape(rbf_out,(-1,rbf_out.get_shape().as_list()[-1]))
+        
+        constrained_lambda_param = tf.math.sigmoid(self.lambda_param)
+        
+        out = poly_out * (1-constrained_lambda_param) + rbf_out * constrained_lambda_param
+        
+        if b is not None:
+            return out +b
+        return out
+    
 
 class PolynomialKernel(tf.keras.layers.Layer):
     def __init__(self,cp=1.0, dp=3.0, trainable=False):
@@ -69,20 +122,7 @@ class PolynomialKernel(tf.keras.layers.Layer):
         if b is not None:
             return out +b
         return out
-
-class SigmoidKernel(tf.keras.layers.Layer):
-    def __init__(self):
-        super(SigmoidKernel, self).__init__(name="sigmoidConv2D")
-        self.linear = LinearKernel()
-
-    def call(self, inputs):
-        x, w, b = inputs
-        out = self.linear((x,w,None))
-        out = tf.math.tanh(out)
-        if b is not None:
-            return out +b
-        return out
-
+    
 class GaussianKernel(tf.keras.layers.Layer):
     def __init__(self, gamma=1.0, trainable=False):
         super(GaussianKernel, self).__init__(name="gaussianConv2D")
@@ -109,6 +149,19 @@ class GaussianKernel(tf.keras.layers.Layer):
         out = tf.exp(-self.gamma*diff_norm)
         if b is not None:
             return out + b
+        return out
+
+class SigmoidKernel(tf.keras.layers.Layer):
+    def __init__(self):
+        super(SigmoidKernel, self).__init__(name="sigmoidConv2D")
+        self.linear = LinearKernel()
+
+    def call(self, inputs):
+        x, w, b = inputs
+        out = self.linear((x,w,None))
+        out = tf.math.tanh(out)
+        if b is not None:
+            return out +b
         return out
 
 class KernelConv2D(tf.keras.layers.Conv2D):
@@ -142,6 +195,9 @@ class KernelConv2D(tf.keras.layers.Conv2D):
         return output
 
 def get_kernel(kernel_name, **kwargs):
+    if kernel_name == 'mixtureOfRBFandPolynomial':
+        return MixtureOfRBFandPolynomial(cp=kwargs['cp'], dp=kwargs['dp'], trainable=kwargs['trainable'],gamma=kwargs['gamma'],
+                                        lambda_param=kwargs['lambda_param'])
     if kernel_name == 'polynomial':
         return PolynomialKernel(cp=kwargs['cp'], dp=kwargs['dp'], trainable=kwargs['trainable'])
     elif kernel_name == 'gaussian':
