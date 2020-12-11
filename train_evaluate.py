@@ -107,6 +107,9 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
     converge_times = np.zeros(len(target_accuracies))
     total_time_training = 0
     
+    training_accuracies_np_array = []
+    validate_accuracies_np_array = []
+    
     for ep in tqdm.trange(epochs, desc='Epoch Loop'):
         if ep < ep_cnt:
             continue
@@ -137,6 +140,7 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
                     train_acc = train_acc_metric.result()
                     train_acc_metric.reset_states()
                     tf.summary.scalar("accuracy", train_acc, step=(step + 1) + ep * nrof_steps_per_epoch)
+                    training_accuracies_np_array.append(float(train_acc))
 
 
                 with validate_summary_writer.as_default():
@@ -150,6 +154,7 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
                     validate_acc = validate_acc_metric.result()
                     validate_acc_metric.reset_states()
                     tf.summary.scalar("accuracy", validate_acc, step=(step + 1) + ep * nrof_steps_per_epoch)
+                    validate_accuracies_np_array.append(float(validate_acc))
 
                 print('[Step {}] train acc: {}'.format(step + 1, float(train_acc)))
                 print('[Step {}] validate acc: {}'.format(step + 1, float(validate_acc)))
@@ -165,6 +170,13 @@ def train_and_evaluate(datasetname,n_classes,batch_size,
                         converge_times[i] = total_time_training
                         print("new converge time of: " + str(converge_times[i]))
                         print("for convergance of: " + str(target_accuracies[i]))
+                        
+    training_accuracies_np_array = np.array(training_accuracies_np_array)
+    np.save(os.path.join(log_dir,'summaries','train',kernel + trainable_str,dt_string,'training_accuracies_np_array'),
+            training_accuracies_np_array)
+    validate_accuracies_np_array = np.array(validate_accuracies_np_array)
+    np.save(os.path.join(log_dir,'summaries','validate',kernel + trainable_str,dt_string,'validate_accuracies_np_array'),
+            validate_accuracies_np_array)
             
     return best_validate_accuracy, converge_times
 
