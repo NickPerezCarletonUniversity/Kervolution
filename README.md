@@ -16,16 +16,15 @@ This code was tested using *TF2.3.1* and *python 3.8.5*.
 pip install -r requirements.txt
 ```
 
-To launch training using *LeNet5* and *MNIST* dataset as described in section 4 in the paper :
+To launch training using *LeNet5* and *MNIST* dataset as described in section 4 of the original paper :
 ```python
-python train_evaluate.py --lr 0.003 --batch_size 50 --epochs 20 --model_name lenetknn --kernel polynomial
+python train_evaluate.py --lr 0.003 --batch_size 50 --epochs 20 --model_name lenetknn --kernel polynomial --trainable_kernel true
 ```
 
-The figures below represent the test accuracy for the first epoch.  
-<br />
-<div align="center">
-<img width="90%" src ="./KNN_Mini_Paper.pdf" /> 
-<br />
+To launch training using *LeNet5* and *MNIST* dataset as described in section 6 of the mini paper included in this repo:
+```python
+python train_evaluate.py --batch_size 50 --epochs 20 --model_name lenetknn --kernel polynomial --trainable_kernel true --lr_search true
+```
 
 The figures below represent the test accuracy for the first epoch.  
 <br />
