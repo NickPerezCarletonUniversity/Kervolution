@@ -24,6 +24,12 @@ python train_evaluate.py --lr 0.003 --batch_size 50 --epochs 20 --model_name len
 The figures below represent the test accuracy for the first epoch.  
 <br />
 <div align="center">
+<img width="90%" src ="./KNN_Mini_Paper.pdf" /> 
+<br />
+
+The figures below represent the test accuracy for the first epoch.  
+<br />
+<div align="center">
 <img width="90%" src ="./images/KernelsVsConvergence.png" /> 
 <br />
 
