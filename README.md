@@ -29,6 +29,12 @@ python train_evaluate.py --batch_size 50 --epochs 20 --model_name lenetknn --ker
 The figures below represent the test accuracy for the first epoch.  
 <br />
 <div align="center">
+<img width="90%" src ="./KNN_Mini_Paper.png" /> 
+<br />
+
+The figures below represent the test accuracy for the first epoch.  
+<br />
+<div align="center">
 <img width="90%" src ="./images/KernelsVsConvergence.png" /> 
 <br />
 
