@@ -9,6 +9,7 @@ The key idea is to use non-linear kernels to extract more complexe features with
 The purpose of this repository is to further test the KNN paper's claims and also further analyze why KNNs may or may not be better than CNNs and under which circumstances.
 
 ### Changes Made
+This code repository is a modification and augmentation of the repository found here: https://github.com/amalF/Kervolution. For a detailed track of all the exact changes made, go to https://github.com/NickPerezCarletonUniversity/Kervolution and click on any of the files, then the 'history' button to see a list of commits showing the exact code changes. The changes I made from the original repository are outlined below.
 #### train_evaluate.py
 Modified this file to enable the newly proposed methodology outlined in section 4 B of the associated KNN_Mini_Paper.pdf file.
 Also enabled saving results as np arrays for creating more descriptive graphs.
