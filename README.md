@@ -8,6 +8,12 @@ The key idea is to use non-linear kernels to extract more complexe features with
 
 The purpose of this repository is to further test the KNN paper's claims and also further analyze why KNNs may or may not be better than CNNs and under which circumstances.
 
+### Changes Made
+#### train_evaluate.py
+##### test
+#### train_evaluate.py
+##### test
+
 ### Implementation
 
 This code was tested using *TF2.3.1* and *python 3.8.5*.
@@ -26,7 +32,7 @@ To launch training using *LeNet5* and *MNIST* dataset as described in section 6 
 python train_evaluate.py --batch_size 50 --epochs 20 --model_name lenetknn --kernel polynomial --trainable_kernel true --lr_search true
 ```
 
-The figures below represent the test accuracy for the first epoch.  
+The figure below is a png rendering of a written report summarizing the original KNN paper and the experimentation and analysis this repository was used for.  
 <br />
 <div align="center">
 <img width="90%" src ="./KNN_Mini_Paper.png" /> 
